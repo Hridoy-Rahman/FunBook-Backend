@@ -1,10 +1,9 @@
-
 import Verification from "../models/emailVerificationModel.js";
 import Users from "../models/userModel.js";
 import { compareString, createJWT, hashString } from "../utils/index.js";
 import passwordReset from "../models/passwordReset.js";
-import { resetPasswordLink } from "../utils/sendVerificationEmail.js";
 import FriendRequest from "../models/friendRequestModel.js";
+import { resetPasswordLink } from "../utils/sendVerificationEmail.js";
 
 export const verifyEmail = async (req, res) => {
   const { userId, token } = req.params;
@@ -150,15 +149,15 @@ export const changePassword = async (req, res, next) => {
   try {
     const { userId, password } = req.body;
 
-    console.log("UserId:", userId, "Password:", password); // Debug logs
-
     if (!userId || !password) {
       return res.status(400).json({ message: "Missing userId or password" });
     }
 
     const hashedpassword = await hashString(password);
 
-    const user = await Users.findByIdAndUpdate(userId, { password: hashedpassword });
+    const user = await Users.findByIdAndUpdate(userId, {
+      password: hashedpassword,
+    });
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -172,7 +171,9 @@ export const changePassword = async (req, res, next) => {
     });
   } catch (error) {
     console.error("Error changing password:", error.message);
-    res.status(500).json({ message: "An error occurred while changing the password." });
+    res
+      .status(500)
+      .json({ message: "An error occurred while changing the password." });
   }
 };
 
@@ -331,14 +332,14 @@ export const acceptRequest = async (req, res, next) => {
 
     const { rid, status } = req.body;
 
-    const requestExist = await friendRequest.findById(rid);
+    const requestExist = await FriendRequest.findById(rid);
 
     if (!requestExist) {
       next("No Friend Request Found.");
       return;
     }
 
-    const newRes = await friendRequest.findByIdAndUpdate(
+    const newRes = await FriendRequest.findByIdAndUpdate(
       { _id: rid },
       { requestStatus: status }
     );
@@ -368,5 +369,56 @@ export const acceptRequest = async (req, res, next) => {
       success: false,
       error: error.message,
     });
+  }
+};
+
+export const profileViews = async (req, res, next) => {
+  try {
+    const { userId } = req.body.user;
+    const { id } = req.body;
+
+    const user = await Users.findById(id);
+
+    user.views.push(userId);
+
+    await user.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "auth error",
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
+export const suggestedFriends = async (req, res) => {
+  try {
+    const { userId } = req.body.user;
+
+    let queryObject = {};
+
+    queryObject._id = { $ne: userId };
+
+    queryObject.friends = { $nin: userId };
+
+    let queryResult = Users.find(queryObject)
+      .limit(15)
+      .select("firstName lastName profileUrl profession -password");
+
+    const suggestedFriends = await queryResult;
+
+    res.status(200).json({
+      success: true,
+      data: suggestedFriends,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(404).json({ message: error.message });
   }
 };
